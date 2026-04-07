@@ -1,4 +1,5 @@
 import SwiftUI
+import SpriteKit
 
 @main
 struct AdAstraApp: App {
@@ -15,29 +16,47 @@ struct AdAstraApp: App {
     }
 }
 
-// MARK: - Game Container (bridges UIKit/SpriteKit into SwiftUI lifecycle)
+// MARK: - Game Container
 
 struct GameContainerView: View {
     @EnvironmentObject var habitTracker: HabitTracker
     @State private var showHabitSetup = false
-    
+    @State private var navigationPath = NavigationPath()
+
     var body: some View {
-        SpriteKitContainer()
-            .ignoresSafeArea()
-            .onAppear {
-                showHabitSetup = habitTracker.needsDailySetup
-            }
-            // FIX: Ascolta la notifica proveniente dal MainMenuScene
-            .onReceive(NotificationCenter.default.publisher(for: .showHabitSetup)) { _ in
-                showHabitSetup = true
-            }
-            .sheet(isPresented: $showHabitSetup) {
-                HabitSetupView(habitTracker: habitTracker) {
-                    showHabitSetup = false
-                    // FIX: Fai partire il gioco automaticamente dopo aver inserito l'obiettivo!
-                    NotificationCenter.default.post(name: Notification.Name("startGameAutomatically"), object: nil)
+        NavigationStack(path: $navigationPath) {
+            SpriteKitContainer()
+                .ignoresSafeArea()
+                .navigationDestination(for: String.self) { destination in
+                    switch destination {
+                    case "profile":
+                        ProfileView()
+                    case "settings":
+                        SettingsView()
+                    default:
+                        EmptyView()
+                    }
                 }
+        }
+        .onAppear {
+            showHabitSetup = habitTracker.needsDailySetup
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showHabitSetup)) { _ in
+            showHabitSetup = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("showProfile"))) { _ in
+            navigationPath.append("profile")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("showSettings"))) { _ in
+            navigationPath.append("settings")
+        }
+        .sheet(isPresented: $showHabitSetup) {
+            HabitSetupView(habitTracker: habitTracker) {
+                showHabitSetup = false
+                NotificationCenter.default.post(
+                    name: Notification.Name("startGameAutomatically"), object: nil)
             }
+        }
     }
 }
 
@@ -62,5 +81,3 @@ struct SpriteKitContainer: UIViewRepresentable {
     
     func updateUIView(_ uiView: SKView, context: Context) {}
 }
-
-import SpriteKit

@@ -4,16 +4,16 @@ import GameplayKit
 // MARK: - Deterministic Platform Generator
 //
 // ┌─────────────────────────────────────────────────────────────────────┐
-// │                    LOGICA PROCEDURALE "SEAMLESS"                    │
+// │                    "SEAMLESS" PROCEDURAL LOGIC                      │
 // │                                                                     │
-// │  Questa classe ricrea l'intero mondo da y=0 fino alla quota target  │
-// │  in modo puramente matematico e deterministico.                     │
-// │  Vantaggi:                                                          │
-// │  - NESSUN "GAP" AI CONFINI DEI CHUNK! I salti sono matematicamente  │
-// │    perfetti attraversando i chunk.                                  │
-// │  - Checkpoint calcolati organicamente. Il generatore si accorge se  │
-// │    ne sta per incontrare uno e piazza automaticamente un "ponte"    │
-// │    a distanza raggiungibile, prima di piazzare il checkpoint d'oro. │
+// │  This class recreates the entire world from y=0 up to the target    │
+// │  altitude in a purely mathematical and deterministic way.           │
+// │  Advantages:                                                        │
+// │  - NO "GAPS" AT CHUNK BOUNDARIES! Jumps are mathematically perfect  │
+// │    across chunks.                                                   │
+// │  - Organically calculated checkpoints. The generator detects if one │
+// │    is approaching and automatically places a reachabl "bridge"      │
+// │    before placing the golden checkpoint platform.                   │
 // └─────────────────────────────────────────────────────────────────────┘
 
 class DeterministicPlatformGenerator {
@@ -29,6 +29,13 @@ class DeterministicPlatformGenerator {
         self.scene         = scene
         self.containerNode = containerNode
         computeLanes()
+    }
+    
+    /// Determines the kingdom based on normalized progression
+    private func kingdomFor(progression: CGFloat) -> Kingdom {
+        if progression < GameConstants.Kingdoms.infernoEnd { return .inferno }
+        if progression < GameConstants.Kingdoms.purgatorioEnd { return .purgatorio }
+        return .paradiso
     }
 
     private func computeLanes() {
@@ -59,19 +66,19 @@ class DeterministicPlatformGenerator {
         let chunkStart = CGFloat(index) * chunkSize
         let chunkEnd   = chunkStart + chunkSize
 
-        // Seed globale fisso: il mondo è SEMPRE identico in ogni sessione.
-        // Questo garantisce che simulandolo da 0 a Y, le decisioni del RNG siano in sincrono perfetto.
+        // Fixed global seed: the world is ALWAYS identical in every session.
+        // This ensures that when simulating from 0 to Y, RNG decisions are in perfect sync.
         let globalRng = GKLinearCongruentialRandomSource(seed: 42)
 
         var currentY: CGFloat = 0.0
         var lastSafeLane: Int = 2
 
-        // Tutti i checkpoint, ordinati dal più basso
+        // All checkpoints, sorted from lowest
         var upcomingCheckpoints = GameConstants.Kingdoms.checkpointAltitudes.enumerated().map {
             ($0.offset, $0.element * GameConstants.World.totalWorldHeight)
         }.sorted { $0.1 < $1.1 }
 
-        // Simulazione dal suolo (y=0) fino alla fine matematica del chunk che stiamo per caricare
+        // Simulation from ground (y=0) up to the mathematical end of the chunk we are about to load
         while currentY < chunkEnd {
             var isBridge = false
             var targetCheckpoint: (Int, CGFloat)? = nil
@@ -80,7 +87,7 @@ class DeterministicPlatformGenerator {
             let baseGap: CGFloat = 85.0
             let difficultyGap: CGFloat = 30.0 * progression
             
-            // Consuma 2 tick RNG per calcolare il gap
+            // Consumes 2 RNG ticks to calculate the gap
             let rngRoll1 = CGFloat(globalRng.nextUniform())
             let rngRoll2 = CGFloat(globalRng.nextUniform())
             
@@ -89,13 +96,13 @@ class DeterministicPlatformGenerator {
 
             var nextY = currentY + verticalGap
 
-            // Verifichiamo se ci stiamo imbattendo in un checkpoint
+            // Check if we are running into a checkpoint
             if let nextCp = upcomingCheckpoints.first {
                 let cpAlt = nextCp.1
-                let proceduralLimit = cpAlt - 85 // Posizione in cui SI DEVE piazzare l'ultimo nodo utile
+                let proceduralLimit = cpAlt - 85 // Position where the last useful node MUST be placed
 
                 if nextY >= proceduralLimit - 15 {
-                    // Forziamo il piazzamento del ponte al livello perfetto per raggiungere il checkpoint
+                    // Force a bridge placement at the perfect level to reach the checkpoint
                     nextY = proceduralLimit
                     isBridge = true
                     targetCheckpoint = nextCp
@@ -103,42 +110,43 @@ class DeterministicPlatformGenerator {
                 }
             }
 
-            // Distanza fisica minima garantita (altrimenti i nodi si compenetrano)
+            // Guaranteed minimum physical distance (otherwise nodes overlap)
             if nextY - currentY < 75 {
                 nextY = currentY + 75
             }
 
             currentY = nextY
             
-            // Definisce se i nodi generati in questo step appartengono REALMENTE al chunk che stiamo caricando
+            // Defines if the nodes generated in this step REALLY belong to the chunk we are loading
             let isInsideChunk = (currentY >= chunkStart && currentY < chunkEnd)
 
             if isBridge, let cp = targetCheckpoint {
-                // PONTE: Il nodo centrale sicuro che funge da slancio per la piattaforma
+                // BRIDGE: The safe central node that serves as a launch for the platform
                 if isInsideChunk {
                     let bridgeNode = HoldNode(type: .solid)
                     bridgeNode.position = CGPoint(x: lanes[2], y: currentY)
                     bridgeNode.name = "hold_bridge"
+                    bridgeNode.buildVisuals()
                     tag(bridgeNode, chunk: index)
                     containerNode.addChild(bridgeNode)
                 }
 
-                // CHECKPOINT: La piattaforma d'oro di salvataggio
-                // Lo controlliamo e lo piazziamo separatamente per posizionarlo esattamente nella sua altitudine fissa
+                // CHECKPOINT: The golden rescue platform
+                // We handle and place it separately to position it exactly at its fixed altitude
                 if cp.1 >= chunkStart && cp.1 < chunkEnd {
-                    spawnCheckpoint(at: cp.1, gironeIndex: cp.0, chunkIndex: index)
+                    spawnCheckpoint(at: cp.1, kingdomIndex: cp.0, chunkIndex: index)
                 }
 
-                // Avanziamo la currentY appena oltre il checkpoint per ripartire puliti
+                // Advance currentY just beyond the checkpoint to start clean
                 currentY = cp.1 + 85
                 lastSafeLane = 2
                 continue
             }
 
-            // SE NON E' PONTE: Generiamo la logica dei nodi procedurale
+            // IF NOT A BRIDGE: Generate procedural node logic
             
-            // Consuma tick RNG per stabilire nodi e corsie
-            let safeRoll = globalRng.nextInt(upperBound: 3) // per shift di -1, 0, +1
+            // Consumes RNG ticks to establish nodes and lanes
+            let safeRoll = globalRng.nextInt(upperBound: 3) // for shifts of -1, 0, +1
             let countRoll = globalRng.nextUniform()
             
             let minSafe = max(0, lastSafeLane - 1)
@@ -147,18 +155,18 @@ class DeterministicPlatformGenerator {
 
             let nodeCount: Int
             if progression < 0.15 {
-                // Tutorial: quasi sempre 1nodo (percorso obbligato), a volte 2
+                // Tutorial: almost always 1 node (forced path), sometimes 2
                 nodeCount = countRoll < 0.8 ? 1 : 2
             } else if progression < 0.33 {
-                // Inferno: mix di 1 e 2 nodi
+                // Inferno: mix of 1 and 2 nodes
                 nodeCount = countRoll < 0.5 ? 1 : 2
             } else if progression < 0.66 {
-                // Purgatorio: maggioranza 2 nodi (bivio), raramente 1 o 3
+                // Purgatorio: mostly 2 nodes (fork), rarely 1 or 3
                 if countRoll < 0.2 { nodeCount = 1 }
                 else if countRoll < 0.85 { nodeCount = 2 }
                 else { nodeCount = 3 }
             } else {
-                // Paradiso: percorsi doppi, a volte tripli (caos massimo)
+                // Paradiso: double paths, sometimes triple (maximum chaos)
                 nodeCount = countRoll < 0.65 ? 2 : 3
             }
 
@@ -175,14 +183,14 @@ class DeterministicPlatformGenerator {
             lastSafeLane = safeLane
 
             for lane in activeLanes.sorted() {
-                // IMPORTANTISSIMO: Dobbiamo consumare l'RNG esatto a prescindere che siamo dentro il chunk visibile 
-                // o no. Altrimenti si spacca la simulazione.
+                // VERY IMPORTANT: We must consume text RNG regardless of whether we are inside visible chunk
+                // or not. Otherwise the simulation breaks.
                 let rollY      = CGFloat(globalRng.nextUniform())
                 let rollX      = CGFloat(globalRng.nextUniform())
                 let rollType   = CGFloat(globalRng.nextUniform())
                 let rollEnemy  = CGFloat(globalRng.nextUniform())
 
-                // Bypass visuale rapido se fuori dal chunk corrente
+                // Quick visual bypass if outside the current chunk
                 if !isInsideChunk { continue } 
                 
                 let yJitter = (rollY - 0.5) * 16.0
@@ -196,13 +204,13 @@ class DeterministicPlatformGenerator {
                 var spawnEnemy = false
 
                 if lane == safeLane {
-                    // CORSIA SICURA: Niente trappole istantanee o nemici, massimo movimento o rimbalzo
+                    // SAFE LANE: No instant traps or enemies, max movement or bouncy
                     if progression > 0.5 {
                         if rollType < 0.2 { nodeType = .moving }
                         else if rollType < 0.3 { nodeType = .bouncy }
                     }
                 } else {
-                    // CORSIE ALTERNATIVE: Gradualmente più diaboliche
+                    // ALTERNATIVE LANES: Gradually more diabolical
                     if progression < 0.15 { nodeType = .solid }
                     else if progression < 0.33 {
                         if rollType < 0.15 { nodeType = .sticky }
@@ -232,17 +240,48 @@ class DeterministicPlatformGenerator {
                 let holdNode = HoldNode(type: nodeType)
                 holdNode.position = CGPoint(x: finalX, y: holdY)
                 holdNode.name = "hold_\(nodeType)"
+                holdNode.kingdom = kingdomFor(progression: progression)
+                holdNode.buildVisuals()
                 tag(holdNode, chunk: index)
                 containerNode.addChild(holdNode)
 
                 if spawnEnemy {
                     let bug = GloomBugNode()
-                    // Dispone i nemici lateralmente per non ostacolare il tap del nodo!
                     let enemyOffsetX: CGFloat = lane < 2 ? 35 : -35
                     bug.position = CGPoint(x: finalX + enemyOffsetX, y: holdY + 30)
                     bug.name = "enemy"
                     tag(bug, chunk: index)
                     containerNode.addChild(bug)
+                }
+                
+                // ── SMOKE MIRROR: Spawn TarHound (Late Inferno + Purgatorio) ──
+                let currentKingdom = kingdomFor(progression: progression)
+                if lane != safeLane && nodeType == .solid {
+                    // TarHound: only in non-safe lanes, with increasing probability
+                    if (currentKingdom == .inferno && progression > 0.2) || currentKingdom == .purgatorio {
+                        // Consume an extra RNG roll for TarHound decision
+                        let tarRoll = CGFloat(globalRng.nextUniform())
+                        let tarChance: CGFloat = currentKingdom == .purgatorio ? 0.08 : 0.04
+                        if tarRoll < tarChance {
+                            let hound = TarHoundNode()
+                            hound.position = CGPoint(x: finalX, y: holdY + 60)
+                            tag(hound, chunk: index)
+                            containerNode.addChild(hound)
+                        }
+                    }
+                }
+                
+                // ── SMOKE MIRROR: Spawn ToxicCloud (Purgatorio + Paradiso) ──
+                if lane == safeLane && (currentKingdom == .purgatorio || currentKingdom == .paradiso) {
+                    let cloudRoll = CGFloat(globalRng.nextUniform())
+                    let cloudChance: CGFloat = currentKingdom == .paradiso ? 0.12 : 0.06
+                    if cloudRoll < cloudChance {
+                        let cloud = ToxicCloudNode(radius: 55)
+                        cloud.position = CGPoint(x: finalX + 40, y: holdY + 40)
+                        cloud.configureForKingdom(currentKingdom)
+                        tag(cloud, chunk: index)
+                        containerNode.addChild(cloud)
+                    }
                 }
             }
         }
@@ -259,9 +298,9 @@ class DeterministicPlatformGenerator {
         }
     }
 
-    // MARK: - Checkpoint (Visuale & Fisico)
+    // MARK: - Checkpoint (Visual & Physical)
 
-    private func spawnCheckpoint(at altitude: CGFloat, gironeIndex: Int, chunkIndex: Int) {
+    private func spawnCheckpoint(at altitude: CGFloat, kingdomIndex: Int, chunkIndex: Int) {
         guard let scene = scene else { return }
         let w = scene.size.width
 
@@ -276,17 +315,18 @@ class DeterministicPlatformGenerator {
         let hold = HoldNode(type: .checkpoint)
         hold.position = CGPoint(x: w / 2, y: altitude + 20)
         hold.name = "hold_checkpoint"
+        hold.buildVisuals()
         tag(hold, chunk: chunkIndex)
         containerNode.addChild(hold)
 
         let label = SKLabelNode(fontNamed: "Avenir-Heavy")
         let altInt = Int(altitude)
         if altInt == 0 {
-            label.text = "— L'ABISSO DI CENERE —"
+            label.text = "— THE ASH ABYSS —"
         } else if altInt == Int(GameConstants.Kingdoms.infernoEnd * GameConstants.World.totalWorldHeight) {
-            label.text = "— LA NEBBIA DEL PURGATORIO —"
+            label.text = "— THE PURGATORY MIST —"
         } else if altInt == Int(GameConstants.Kingdoms.purgatorioEnd * GameConstants.World.totalWorldHeight) {
-            label.text = "— LA VETTA PURA —"
+            label.text = "— THE PURE PEAK —"
         } else {
             label.text = "— CHECKPOINT \(altInt)m —"
         }

@@ -28,44 +28,53 @@ class ResultScene: SKScene {
     // MARK: Setup
     
     private func setupTitle() {
-        let title = SKLabelNode(fontNamed: "Avenir-Heavy")
+        let title = SKLabelNode(fontNamed: "Minecraft")
         title.text = "SESSION COMPLETE"
         title.fontSize = 32
         title.fontColor = GameConstants.Colors.paradisoGold
         title.position = CGPoint(x: size.width / 2, y: size.height * 0.82)
         title.zPosition = 10
+        // Pixel Shadow
+        let shadow = SKLabelNode(fontNamed: "Minecraft")
+        shadow.text = title.text
+        shadow.fontSize = title.fontSize
+        shadow.fontColor = .black
+        shadow.position = CGPoint(x: 2, y: -2)
+        shadow.zPosition = -1
+        title.addChild(shadow)
         addChild(title)
     }
     
     private func setupStats(data: SessionData) {
         let stats: [(String, String)] = [
-            ("Altitude Reached", "\(Int(data.altitudeReached / 10))m"),
-            ("Session Duration", formatDuration(data.sessionDuration)),
-            ("Cigarettes", "\(data.cigarettesThisSession)"),
-            ("Stamina Remaining", "\(Int(data.staminaRemaining))%")
+            ("ALTITUDE REACHED", "\(Int(data.altitudeReached / 10))M"),
+            ("SESSION DURATION", formatDuration(data.sessionDuration)),
+            ("CIGARETTES", "\(data.cigarettesThisSession)"),
+            ("STAMINA REMAINING", "\(Int(data.staminaRemaining))%")
         ]
         
         let startY = size.height * 0.65
-        let spacing: CGFloat = 50
+        let spacing: CGFloat = 60
         
         for (i, stat) in stats.enumerated() {
             let y = startY - CGFloat(i) * spacing
             
             // Label
-            let label = SKLabelNode(fontNamed: "Avenir-Medium")
+            let label = SKLabelNode(fontNamed: "Pixeboy-z8XGD")
             label.text = stat.0
-            label.fontSize = 16
-            label.fontColor = GameConstants.Colors.uiText.withAlphaComponent(0.6)
+            label.fontSize = 22
+            label.fontColor = .white
+            label.alpha = 0.8
             label.position = CGPoint(x: size.width / 2, y: y)
             label.zPosition = 10
             addChild(label)
             
             // Value
-            let value = SKLabelNode(fontNamed: "Avenir-Heavy")
+            let value = SKLabelNode(fontNamed: "Minecraft")
             value.text = stat.1
-            value.fontSize = 24
-            value.fontColor = GameConstants.Colors.uiText
-            value.position = CGPoint(x: size.width / 2, y: y - 26)
+            value.fontSize = 28
+            value.fontColor = GameConstants.Colors.paradisoGold
+            value.position = CGPoint(x: size.width / 2, y: y - 30)
             value.zPosition = 10
             addChild(value)
         }
@@ -75,13 +84,13 @@ class ResultScene: SKScene {
         let centerX = size.width / 2
         
         // Try Again
-        let tryAgain = createButton(text: "▲ TRY AGAIN", fontSize: 22)
+        let tryAgain = createButton(text: "▲ TRY AGAIN", fontSize: 28)
         tryAgain.position = CGPoint(x: centerX, y: size.height * 0.2)
         tryAgain.name = "tryAgainButton"
         addChild(tryAgain)
         
         // Menu
-        let menu = createButton(text: "☰ MENU", fontSize: 18)
+        let menu = createButton(text: "☰ MENU", fontSize: 24)
         menu.position = CGPoint(x: centerX, y: size.height * 0.12)
         menu.name = "menuButton"
         addChild(menu)
@@ -114,11 +123,19 @@ class ResultScene: SKScene {
     // MARK: Helpers
     
     private func createButton(text: String, fontSize: CGFloat) -> SKLabelNode {
-        let label = SKLabelNode(fontNamed: "Avenir-Heavy")
+        let label = SKLabelNode(fontNamed: "Minecraft")
         label.text = text
         label.fontSize = fontSize
-        label.fontColor = GameConstants.Colors.uiText
+        label.fontColor = .white
         label.zPosition = 10
+        // Pixel shadow
+        let shadow = SKLabelNode(fontNamed: "Minecraft")
+        shadow.text = text
+        shadow.fontSize = fontSize
+        shadow.fontColor = .black
+        shadow.position = CGPoint(x: 2, y: -2)
+        shadow.zPosition = -1
+        label.addChild(shadow)
         return label
     }
     

@@ -2,41 +2,76 @@ import SpriteKit
 
 // MARK: - Player Node
 //
-// PERCHÉ isDynamic NON VIENE MAI CAMBIATO:
-//   SpriteKit, quando si riattiva un body con isDynamic = true dopo che era false,
-//   resetta internamente la velocity a zero prima che la nostra assegnazione abbia effetto.
-//   Questo causava il "cade dritto giù" — la velocity tangenziale calcolata in releaseHold()
-//   veniva cancellata dallo stesso framework nello stesso frame.
+// SPRITESHEET ANIMATION:
+//   Expected asset names in Assets.xcassets:
+//     player_00, player_01, player_02, player_03, player_04,
+//     player_05, player_07, player_08, player_09
+//   (9 frames, with non-continuous numbering — skips player_06)
 //
-// SOLUZIONE:
-//   - isDynamic = true SEMPRE (impostato una volta sola in setupPhysics, mai cambiato)
-//   - Agganciato: affectedByGravity = false + velocity azzerata in didSimulatePhysics (GameScene)
-//                 position calcolata manualmente da updateRotation() ogni frame
-//   - In volo:    affectedByGravity = true + velocity tangenziale → traiettoria balistica
+// ROTATION:
+//   zRotation = currentAngle + .pi/2 → head towards the rock while rotating.
+//   In flight zRotation = 0 → character upright.
+//
+// RED X FIX:
+//   PlayerNode.preloadTextures { } must be called in GameScene.didMove(to:)
+//   BEFORE setupPlayer(). setupPlayer() should be moved inside the completion.
 
 class PlayerNode: SKSpriteNode {
 
-    // MARK: - Stato rotazione
+    // MARK: - Rotation State
 
     private(set) var currentHold: HoldNode?
     private(set) var currentAngle: CGFloat = 0
-    private(set) var angularVelocity: CGFloat = GameConstants.Swing.baseAngularVelocity
+    var angularVelocity: CGFloat = GameConstants.Swing.baseAngularVelocity
     let armLength: CGFloat = GameConstants.Swing.armLength
 
-    // MARK: - Fumo
-    private var smokePerturbation: CGFloat = 0
-    private var smokeNoiseTimer: TimeInterval = 0
+    // MARK: - Animation Textures
+    private let grabTextures: [SKTexture]
+    private let releaseTextures: [SKTexture]
+    private let idleHoldTexture: SKTexture   // player_08: hands up, used as idle while grabbed
+
+    // true = the grab animation has already played for this hold,
+    //        should not be restarted until released and re-grabbed
+    private var grabAnimDidPlay = false
+
+    // MARK: - Frame Names
+    // Explicit list of real names in Assets.xcassets.
+    // Change here if you rename the files.
+    private static let frameNames = [
+        "player_00", "player_01", "player_02", "player_03",
+        "player_04", "player_05", "player_06", "player_07", "player_08"
+    ]
+
+    // MARK: - Preload (call from GameScene BEFORE init)
+    static func preloadTextures(completion: @escaping () -> Void) {
+        let textures = frameNames.map { SKTexture(imageNamed: $0) }
+        SKTexture.preload(textures) {
+            DispatchQueue.main.async { completion() }
+        }
+    }
 
     // MARK: - Visuals
     private var armLine: SKShapeNode!
     private var orbitCircle: SKShapeNode!
+    private var ashBackpack: SKShapeNode!
+    private var breathingEmitter: SKEmitterNode!
     private var coughEmitter: SKEmitterNode?
+
+    // MARK: - Smoke Trail
+    private let smokeTrail = SmokeTrailEffect()
 
     // MARK: - Init
 
     init() {
-        let size = CGSize(width: 26, height: 40)
-        super.init(texture: nil, color: GameConstants.Colors.paradisoGold, size: size)
+        let frames = PlayerNode.frameNames.map { SKTexture(imageNamed: $0) }
+
+        grabTextures     = frames
+        releaseTextures  = frames.reversed()
+        idleHoldTexture = frames.isEmpty ? SKTexture() : frames[min(frames.count - 2, frames.count - 1)]
+
+        // Starts on frame 8 (hands up)
+        super.init(texture: grabTextures.first ?? idleHoldTexture, color: .clear, size: CGSize(width: 105, height: 120))
+
         setupPhysics()
         setupVisuals()
         zPosition = 50
@@ -54,8 +89,8 @@ class PlayerNode: SKSpriteNode {
         body.restitution = 0.0
         body.linearDamping = 0.3
         body.allowsRotation = false
-        body.isDynamic = true          // SEMPRE true — non modificato mai altrove
-        body.affectedByGravity = false // Inizia senza gravità (verrà agganciato subito)
+        body.isDynamic = true
+        body.affectedByGravity = false
 
         body.categoryBitMask    = GameConstants.Physics.player
         body.contactTestBitMask = GameConstants.Physics.checkpoint
@@ -81,6 +116,57 @@ class PlayerNode: SKSpriteNode {
         orbitCircle.fillColor = .clear
         orbitCircle.zPosition = 44
         orbitCircle.isHidden = true
+
+        ashBackpack = SKShapeNode(rectOf: CGSize(width: 14, height: 18), cornerRadius: 3)
+        ashBackpack.fillColor = SKColor(white: 0.35, alpha: 0.7)
+        ashBackpack.strokeColor = SKColor(white: 0.25, alpha: 0.5)
+        ashBackpack.lineWidth = 1
+        ashBackpack.position = CGPoint(x: 0, y: -8)
+        ashBackpack.zPosition = -1
+        ashBackpack.setScale(0)
+        addChild(ashBackpack)
+
+        breathingEmitter = SKEmitterNode()
+        breathingEmitter.particleBirthRate = 0
+        breathingEmitter.particleLifetime = 0.6
+        breathingEmitter.particleSpeed = 15
+        breathingEmitter.emissionAngle = .pi / 2
+        breathingEmitter.emissionAngleRange = 0.4
+        breathingEmitter.particleAlpha = 0.3
+        breathingEmitter.particleAlphaSpeed = -0.5
+        breathingEmitter.particleScale = 0.04
+        breathingEmitter.particleScaleSpeed = 0.02
+        breathingEmitter.particleColor = SKColor(white: 0.7, alpha: 1.0)
+        breathingEmitter.particleColorBlendFactor = 1.0
+        breathingEmitter.position = CGPoint(x: 0, y: 16)
+        breathingEmitter.zPosition = 65
+        addChild(breathingEmitter)
+
+        // Smoke trail — behind the player sprite
+        smokeTrail.zPosition = -2
+        addChild(smokeTrail)
+    }
+
+    // MARK: - Animation
+
+    func playGrabAnimation() {
+        removeAction(forKey: "playerAnim")
+        guard !grabTextures.isEmpty else { return }
+        run(SKAction.animate(with: grabTextures,
+                             timePerFrame: 0.030,
+                             resize: false,
+                             restore: false),
+            withKey: "playerAnim")
+    }
+
+    func playReleaseAnimation() {
+        removeAction(forKey: "playerAnim")
+        guard !releaseTextures.isEmpty else { return }
+        run(SKAction.animate(with: releaseTextures,
+                             timePerFrame: 0.055,
+                             resize: false,
+                             restore: false),
+            withKey: "playerAnim")
     }
 
     // MARK: - Grab
@@ -97,13 +183,11 @@ class PlayerNode: SKSpriteNode {
         let dy = position.y - holdPosInParent.y
         currentAngle = atan2(dy, dx)
 
-        // Snap alla distanza esatta del braccio
         position = CGPoint(
             x: holdPosInParent.x + cos(currentAngle) * armLength,
             y: holdPosInParent.y + sin(currentAngle) * armLength
         )
 
-        // Imposta ω
         if !preserveVelocity || prevHold == nil {
             angularVelocity = GameConstants.Swing.baseAngularVelocity
         }
@@ -116,82 +200,61 @@ class PlayerNode: SKSpriteNode {
             angularVelocity = cross < 0 ? -abs(angularVelocity) : abs(angularVelocity)
         }
 
-        // Agganciato: disattiva gravità, azzera velocity, ferma eventuali riattivazioni
-        // isDynamic rimane TRUE — fondamentale per il lancio corretto
         removeAction(forKey: "restore_gravity")
         physicsBody?.affectedByGravity = false
         physicsBody?.velocity = .zero
-        zRotation = currentAngle + .pi / 2 // Mantieni orientamento dritto all'inizio
-        
-        // Le linee guida della liana sono rimosse dal visual per aderire alla roccia
-        // armLine.isHidden     = false
-        // orbitCircle.isHidden = false
+        zRotation = currentAngle + .pi / 2
 
-        run(SKAction.sequence([
-            SKAction.scale(to: 1.15, duration: 0.06),
-            SKAction.scale(to: 1.00, duration: 0.10)
-        ]))
+        // Plays the animation only on the FIRST grab on this hold.
+        // If grab() is recalled on the same hold (e.g. from attachToFirstHold),
+        // the flag prevents restarting the animation and frame 08 remains still.
+        if !grabAnimDidPlay {
+            grabAnimDidPlay = true
+            playGrabAnimation()
+            hold.playGrabEffect()
+        } else {
+            // Already grabbed: ensure the texture is fixed on frame 08
+            removeAction(forKey: "playerAnim")
+            texture = idleHoldTexture
+        }
     }
 
     // MARK: - Release
-    //
-    // Funziona perché:
-    //   1. isDynamic è già true → SpriteKit non resetta nulla quando "riattiva" il body
-    //   2. currentHold = nil prima di tutto il resto → didSimulatePhysics non azzera la velocity
-    //   3. affectedByGravity = true → la gravità riprende immediatamente
-    //   4. velocity = vettore tangenziale → traiettoria balistica corretta
 
     func releaseHold(stamina: PlayerStamina) -> CGVector {
         guard currentHold != nil else { return .zero }
 
-        // Dash RADIALE: dritto per dritto verso l'esterno dalla pietra
         let nx = cos(currentAngle)
         let ny = sin(currentAngle)
-        
         let jumpForce = GameConstants.Jump.baseForce * stamina.jumpForceMultiplier
         let jumpVelocity = CGVector(dx: nx * jumpForce, dy: ny * jumpForce)
 
-        // currentHold = nil PRIMA di tutto il resto
         currentHold = nil
+        grabAnimDidPlay = false   // next grab will play the animation again
 
-        // Lancio dritto per dritto (Dash Lineare temporaneo)
         physicsBody?.affectedByGravity = false
         physicsBody?.velocity = jumpVelocity
 
-        // Riattiva la gravità dopo 0.5 secondi di volo dritto
-        let restoreGravity = SKAction.sequence([
+        run(SKAction.sequence([
             SKAction.wait(forDuration: 0.5),
             SKAction.run { [weak self] in
                 self?.physicsBody?.affectedByGravity = true
             }
-        ])
-        run(restoreGravity, withKey: "restore_gravity")
+        ]), withKey: "restore_gravity")
 
-        // Modalità Superman: orienta mani e testa nella direzione di lancio (verso l'esterno)
-        zRotation = currentAngle - .pi / 2
+        zRotation = 0
+        playReleaseAnimation()
 
         return jumpVelocity
     }
 
-    // MARK: - Update (chiamato ogni frame da GameScene quando agganciato)
+    // MARK: - Update (every frame, when grabbed)
 
     func updateRotation(deltaTime: TimeInterval, stamina: PlayerStamina,
                         holdPositionInParent: CGPoint) {
         guard currentHold != nil else { return }
 
-        smokeNoiseTimer += deltaTime
-        if smokeNoiseTimer > GameConstants.Swing.smokeNoisePeriod {
-            smokeNoiseTimer = 0
-            if stamina.cigarettesLoggedToday > 0 {
-                let maxPert = CGFloat(stamina.cigarettesLoggedToday) * GameConstants.Swing.smokePerturbationPerCig
-                smokePerturbation = CGFloat.random(in: -maxPert...maxPert)
-            } else {
-                smokePerturbation = 0
-            }
-        }
-
-        let omega = angularVelocity + smokePerturbation
-        currentAngle += CGFloat(deltaTime) * omega
+        currentAngle += CGFloat(deltaTime) * angularVelocity
 
         position = CGPoint(
             x: holdPositionInParent.x + cos(currentAngle) * armLength,
@@ -199,9 +262,27 @@ class PlayerNode: SKSpriteNode {
         )
 
         zRotation = currentAngle + .pi / 2
-        // Le linee guida della liana sono nascoste, quindi le disabilitiamo
-        // updateArmLine(holdPos: holdPositionInParent)
-        // orbitCircle.position = holdPositionInParent
+    }
+
+    // MARK: - Smoke Mirror Visuals
+
+    func updateSmokeMirrorVisuals(cigarettes: Int) {
+        let maxCig = CGFloat(GameConstants.SmokeMirror.maxVisualCigarettes)
+        let fillRatio = min(1.0, CGFloat(cigarettes) / maxCig)
+
+        // Ash backpack
+        ashBackpack.setScale(fillRatio)
+        let darkness = 0.35 - fillRatio * 0.2
+        ashBackpack.fillColor = SKColor(white: darkness, alpha: 0.5 + fillRatio * 0.3)
+
+        // Breathing puff
+        breathingEmitter.particleBirthRate = cigarettes > 5
+            ? CGFloat(cigarettes - 5) * 3.0
+            : 0
+
+        // Smoke trail — velocity from physics body, fallback zero
+        let velocity = physicsBody?.velocity ?? .zero
+        smokeTrail.update(cigarettes: cigarettes, velocity: velocity)
     }
 
     private func updateArmLine(holdPos: CGPoint) {
@@ -227,7 +308,6 @@ class PlayerNode: SKSpriteNode {
             SKAction.wait(forDuration: 0.3),
             SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.1)
         ])
-        
         let shake = SKAction.sequence([
             SKAction.moveBy(x: -4, y: 0, duration: 0.04),
             SKAction.moveBy(x:  8, y: 0, duration: 0.08),

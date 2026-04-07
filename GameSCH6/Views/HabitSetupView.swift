@@ -1,318 +1,206 @@
 import SwiftUI
 
 // MARK: - Habit Setup View
+//
+// Appare la prima volta e quando si resetta il goal dalle opzioni.
+// Stile pixel art coerente con il gioco.
 
-/// Shown once per day before gameplay begins.
-/// User sets their Daily Cigarette Goal.
 struct HabitSetupView: View {
-    
+
     @ObservedObject var habitTracker: HabitTracker
     var onComplete: () -> Void
-    
+
     @State private var goal: Int
-    
+    @State private var showConfirm = false
+
+    private let pixelFont = "Minecraft"
+    private let bodyFont  = "Pixeboy-z8XGD"
+
     init(habitTracker: HabitTracker, onComplete: @escaping () -> Void) {
         self.habitTracker = habitTracker
-        self.onComplete = onComplete
-        _goal = State(initialValue: habitTracker.dailyCigaretteGoal)
+        self.onComplete   = onComplete
+        _goal = State(initialValue: max(1, habitTracker.dailyCigaretteGoal))
     }
-    
+
     var body: some View {
         ZStack {
-            // Background
-            Color(red: 0.05, green: 0.05, blue: 0.05)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 28) {
+            // ── Background ──
+            Color(red: 0.04, green: 0.03, blue: 0.08).ignoresSafeArea()
+            pixelStarField
+
+            VStack(spacing: 0) {
                 Spacer()
-                
-                // Greeting
-                Text("☀️")
-                    .font(.system(size: 48))
-                
-                Text("Good Morning!")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                
-                // Yesterday's stats
-                if habitTracker.yesterdayCigaretteCount > 0 {
-                    Text("Yesterday: \(habitTracker.yesterdayCigaretteCount) cigarettes")
-                        .font(.system(size: 16, design: .rounded))
-                        .foregroundColor(.white.opacity(0.5))
-                }
-                
-                // Streak
-                if habitTracker.currentStreak > 0 {
-                    HStack(spacing: 6) {
-                        Text("🔥")
-                        Text("\(habitTracker.currentStreak) day streak")
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .foregroundColor(Color(red: 1.0, green: 0.84, blue: 0.0))
+
+                // ── Header ──
+                VStack(spacing: 8) {
+                    Text("☀️")
+                        .font(.system(size: 40))
+
+                    Text("NUOVO GIORNO")
+                        .font(.custom(pixelFont, size: 30))
+                        .foregroundColor(Color(GameConstants.Colors.paradisoGold))
+                        .shadow(color: .black, radius: 0, x: 2, y: -2)
+
+                    if habitTracker.yesterdayCigaretteCount > 0 {
+                        Text("IERI: \(habitTracker.yesterdayCigaretteCount) SIGARETTE")
+                            .font(.custom(bodyFont, size: 18))
+                            .foregroundColor(.white.opacity(0.55))
                     }
                 }
-                
-                Spacer()
-                
-                // Goal setter
-                VStack(spacing: 16) {
-                    Text("Today's Goal:")
-                        .font(.system(size: 18, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.7))
-                    
-                    HStack(spacing: 24) {
-                        // Minus button
-                        Button(action: {
+
+                Spacer().frame(height: 36)
+
+                // ── Goal setter ──
+                VStack(spacing: 20) {
+                    Text("QUANTE VUOI FUMARNE AL GIORNO?")
+                        .font(.custom(bodyFont, size: 17))
+                        .foregroundColor(.white.opacity(0.80))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+
+                    // Numero grande
+                    HStack(spacing: 28) {
+                        pixelButton(label: "−") {
                             if goal > 0 { goal -= 1 }
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }) {
-                            Image(systemName: "minus.circle.fill")
-                                .font(.system(size: 40))
-                                .foregroundColor(.white.opacity(0.6))
                         }
-                        
-                        // Goal number
-                        Text("\(goal)")
-                            .font(.system(size: 64, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                            .frame(width: 100)
-                        
-                        // Plus button
-                        Button(action: {
+
+                        VStack(spacing: 4) {
+                            Text("\(goal)")
+                                .font(.custom(pixelFont, size: 72))
+                                .foregroundColor(colorForGoal(goal))
+                                .animation(.easeInOut(duration: 0.1), value: goal)
+
+                            Text("AL GIORNO")
+                                .font(.custom(bodyFont, size: 14))
+                                .foregroundColor(.white.opacity(0.35))
+                        }
+                        .frame(width: 120)
+
+                        pixelButton(label: "+") {
                             if goal < 40 { goal += 1 }
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 40))
-                                .foregroundColor(.white.opacity(0.6))
                         }
                     }
-                    
-                    Text("max cigarettes")
-                        .font(.system(size: 14, design: .rounded))
-                        .foregroundColor(.white.opacity(0.4))
-                }
-                .padding(28)
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(Color.white.opacity(0.06))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                        )
-                )
-                .padding(.horizontal, 24)
-                
-                // Stamina preview
-                staminaPreview
-                
-                Spacer()
-                
-                // CTA Button
-                Button(action: {
-                    habitTracker.completeDailySetup(goal: goal)
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    onComplete()
-                }) {
-                    Text("BEGIN ASCENT ▲")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 1.0, green: 0.84, blue: 0.0),
-                                    Color(red: 1.0, green: 0.65, blue: 0.0)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .cornerRadius(16)
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 40)
-            }
-        }
-    }
-    
-    // MARK: - Stamina Preview
-    
-    private var staminaPreview: some View {
-        VStack(spacing: 6) {
-            HStack {
-                Text("💪")
-                Text("Max stamina starts at 100%!")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundColor(Color(red: 0.18, green: 0.80, blue: 0.44))
-            }
-            
-            if goal > 0 {
-                Text("Each cigarette reduces it by 5%")
-                    .font(.system(size: 12, design: .rounded))
-                    .foregroundColor(.white.opacity(0.4))
-            }
-        }
-    }
-}
 
-// MARK: - Profile View
-
-/// Displays player stats: altitude, girone, streak, and smoking history.
-struct ProfileView: View {
-    
-    @ObservedObject var progress = PlayerProgress.shared
-    @ObservedObject var habitTracker = HabitTracker.shared
-    @Environment(\.dismiss) var dismiss
-    
-    var body: some View {
-        NavigationView {
-            ZStack {
-                Color(red: 0.05, green: 0.05, blue: 0.05)
-                    .ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Character preview
-                        characterCard
-                        
-                        // Stats grid
-                        statsGrid
-                        
-                        // Streak rewards
-                        streakRewardsSection
+                    // Preset rapidi
+                    HStack(spacing: 10) {
+                        ForEach([0, 5, 10, 20], id: \.self) { preset in
+                            Button {
+                                goal = preset
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            } label: {
+                                Text("\(preset)")
+                                    .font(.custom(bodyFont, size: 16))
+                                    .foregroundColor(goal == preset ? .black : .white.opacity(0.7))
+                                    .frame(width: 52, height: 32)
+                                    .background(
+                                        goal == preset
+                                        ? Color(GameConstants.Colors.paradisoGold)
+                                        : Color.white.opacity(0.08)
+                                    )
+                                    .overlay(Rectangle().stroke(Color.white.opacity(0.15), lineWidth: 2))
+                            }
+                        }
                     }
-                    .padding()
+
+                    // Descrizione contestuale
+                    Text(goalDescription(goal))
+                        .font(.custom(bodyFont, size: 14))
+                        .foregroundColor(colorForGoal(goal).opacity(0.85))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                        .animation(.easeInOut, value: goal)
                 }
-            }
-            .navigationTitle("Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .foregroundColor(Color(red: 1.0, green: 0.84, blue: 0.0))
-                }
-            }
-        }
-    }
-    
-    // MARK: - Character Card
-    
-    private var characterCard: some View {
-        VStack(spacing: 12) {
-            // Placeholder character
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(red: 1.0, green: 0.84, blue: 0.0).opacity(0.3))
-                .frame(width: 80, height: 120)
-                .overlay(
-                    Text("🧗")
-                        .font(.system(size: 48))
+                .padding(24)
+                .background(
+                    ZStack {
+                        Color(red: 0.06, green: 0.04, blue: 0.10)
+                        Rectangle()
+                            .stroke(Color(GameConstants.Colors.infernoAccent).opacity(0.4),
+                                    lineWidth: 3)
+                    }
                 )
-            
-            Text(progress.currentKingdom.displayName)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-            
-            Text("Girone: \(progress.gironeName)")
-                .font(.system(size: 14, design: .rounded))
-                .foregroundColor(.white.opacity(0.6))
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white.opacity(0.06))
-        )
-    }
-    
-    // MARK: - Stats Grid
-    
-    private var statsGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-            statCell(icon: "↑", value: "\(Int(progress.currentAltitude / 10))m", label: "Altitude")
-            statCell(icon: "🔥", value: "\(habitTracker.currentStreak)", label: "Streak")
-            statCell(icon: "⏱", value: formatTime(progress.totalPlayTime), label: "Play Time")
-            statCell(icon: "🏁", value: "\(progress.highestCheckpoint + 1)/9", label: "Checkpoints")
-        }
-    }
-    
-    private func statCell(icon: String, value: String, label: String) -> some View {
-        VStack(spacing: 8) {
-            Text(icon)
-                .font(.system(size: 24))
-            Text(value)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-            Text(label)
-                .font(.system(size: 12, design: .rounded))
-                .foregroundColor(.white.opacity(0.5))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color.white.opacity(0.04))
-        )
-    }
-    
-    // MARK: - Streak Rewards
-    
-    private var streakRewardsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Streak Rewards")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-            
-            ForEach(HabitTracker.streakMilestones, id: \.self) { milestone in
-                let achieved = habitTracker.longestStreak >= milestone
-                
-                HStack {
-                    Image(systemName: achieved ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(achieved
-                            ? Color(red: 0.18, green: 0.80, blue: 0.44)
-                            : .white.opacity(0.3))
-                    
-                    Text("\(milestone) days")
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                        .foregroundColor(achieved ? .white : .white.opacity(0.4))
-                    
-                    Spacer()
-                    
-                    Text(rewardName(for: milestone))
-                        .font(.system(size: 14, design: .rounded))
-                        .foregroundColor(achieved
-                            ? Color(red: 1.0, green: 0.84, blue: 0.0)
-                            : .white.opacity(0.3))
+                .padding(.horizontal, 20)
+
+                Spacer().frame(height: 32)
+
+                // ── CTA ──
+                Button {
+                    habitTracker.completeDailySetup(goal: goal)
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                    onComplete()
+                    NotificationCenter.default.post(name: Notification.Name("startGameAutomatically"), object: nil)
+                } label: {
+                    Text("INIZIA L'ASCESA  ▲")
+                        .font(.custom(pixelFont, size: 22))
+                        .foregroundColor(Color(red: 0.06, green: 0.04, blue: 0.00))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                        .background(Color(GameConstants.Colors.paradisoGold))
+                        .overlay(Rectangle().stroke(Color.black.opacity(0.3), lineWidth: 3))
+                        .shadow(color: .black.opacity(0.4), radius: 0, x: 3, y: -3)
                 }
-                .padding(.vertical, 4)
+                .padding(.horizontal, 20)
+
+                // Nota se goal = 0
+                if goal == 0 {
+                    Text("Obiettivo zero = massima salute in gioco.")
+                        .font(.custom(bodyFont, size: 13))
+                        .foregroundColor(.white.opacity(0.30))
+                        .padding(.top, 8)
+                }
+
+                Spacer().frame(height: 40)
             }
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white.opacity(0.04))
-        )
     }
-    
-    // MARK: - Helpers
-    
-    private func rewardName(for days: Int) -> String {
-        switch days {
-        case 3:   return "Silver Trail"
-        case 7:   return "Golden Trail"
-        case 14:  return "Phoenix Hat"
-        case 30:  return "Star Aura"
-        case 60:  return "Crystal Wings"
-        case 90:  return "Aurora Crown"
-        case 180: return "Nebula Trail"
-        case 365: return "Celestial Form"
-        default:  return "Mystery"
+
+    // MARK: - Sottoviste
+
+    @ViewBuilder
+    private var pixelStarField: some View {
+        GeometryReader { geo in
+            ForEach(0..<40, id: \.self) { i in
+                let x = CGFloat((i * 137) % Int(geo.size.width))
+                let y = CGFloat((i * 97)  % Int(geo.size.height))
+                let s = CGFloat.random(in: 1.5...3.5)
+                Rectangle()
+                    .fill(Color.white.opacity(Double.random(in: 0.1...0.5)))
+                    .frame(width: s, height: s)
+                    .position(x: x, y: y)
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    private func pixelButton(label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.custom(pixelFont, size: 36))
+                .foregroundColor(.white)
+                .frame(width: 52, height: 52)
+                .background(Color.white.opacity(0.10))
+                .overlay(Rectangle().stroke(Color.white.opacity(0.20), lineWidth: 2))
         }
     }
-    
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        let hours = Int(seconds) / 3600
-        let mins = Int(seconds) % 3600 / 60
-        return "\(hours)h \(mins)m"
+
+    // MARK: - Helpers
+
+    private func colorForGoal(_ g: Int) -> Color {
+        if g == 0  { return Color(GameConstants.Colors.paradisoGreen) }
+        if g <= 5  { return Color(GameConstants.Colors.paradisoGreen) }
+        if g <= 12 { return Color(GameConstants.Colors.purgatorioWarm) }
+        return Color(GameConstants.Colors.infernoAccent)
+    }
+
+    private func goalDescription(_ g: Int) -> String {
+        switch g {
+        case 0:      return "Polmoni d'acciaio. Nessun malus in gioco."
+        case 1...4:  return "Ottimo obiettivo. Malus minimi."
+        case 5...9:  return "Accettabile. Il pendolo sarà irregolare."
+        case 10...14: return "Pericoloso. Tosse e visione compromessa."
+        default:     return "Critico. Sopravvivenza difficile."
+        }
     }
 }

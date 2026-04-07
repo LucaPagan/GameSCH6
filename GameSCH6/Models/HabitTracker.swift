@@ -23,6 +23,9 @@ final class HabitTracker: ObservableObject {
     /// Timestamps of each cigarette logged today
     @Published private(set) var todayCigaretteTimestamps: [Date]
     
+    /// Timestamps of urges (cravings resisted or logged) today
+    @Published private(set) var todayUrgeTimestamps: [Date]
+    
     /// Current smoke-free streak (consecutive days with 0 cigarettes)
     @Published private(set) var currentStreak: Int
     
@@ -64,9 +67,32 @@ final class HabitTracker: ObservableObject {
     private var lastSetupDate: Date? {
         UserDefaults.standard.object(forKey: Keys.lastSetupDate) as? Date
     }
-    
+
+    // MARK: - Midnight auto-reset
+
+    private var midnightTimer: Timer?
+
+    /// Schedules a timer that fires at the next midnight and auto-resets the day.
+    func scheduleMidnightReset() {
+        midnightTimer?.invalidate()
+        let now = Date()
+        var comps = Calendar.current.dateComponents([.year, .month, .day], from: now)
+        comps.day! += 1
+        comps.hour = 0; comps.minute = 0; comps.second = 1
+        guard let nextMidnight = Calendar.current.date(from: comps) else { return }
+        midnightTimer = Timer(fireAt: nextMidnight, interval: 0, target: self,
+                              selector: #selector(handleMidnight), userInfo: nil, repeats: false)
+        RunLoop.main.add(midnightTimer!, forMode: .common)
+    }
+
+    @objc private func handleMidnight() {
+        rollOverToNewDay()
+        NotificationCenter.default.post(name: .dailyReset, object: nil)
+        scheduleMidnightReset() // schedule again for the next midnight
+    }
+
     // MARK: Initialization
-    
+
     private init() {
         let defaults = UserDefaults.standard
         
@@ -77,10 +103,12 @@ final class HabitTracker: ObservableObject {
         if isNewDay {
             self.cigarettesLoggedToday = 0
             self.todayCigaretteTimestamps = []
+            self.todayUrgeTimestamps = []
             self.hasCompletedDailySetup = false
         } else {
             self.cigarettesLoggedToday = defaults.integer(forKey: Keys.cigarettesToday)
             self.todayCigaretteTimestamps = (defaults.array(forKey: Keys.timestamps) as? [Date]) ?? []
+            self.todayUrgeTimestamps = (defaults.array(forKey: Keys.urgeTimestamps) as? [Date]) ?? []
             self.hasCompletedDailySetup = defaults.bool(forKey: Keys.hasCompletedSetup)
         }
         
@@ -117,13 +145,22 @@ final class HabitTracker: ObservableObject {
         
         // Check if we just exceeded the goal
         if cigarettesLoggedToday == dailyCigaretteGoal + 1 {
-            NotificationCenter.default.post(name: .dailyGoalExceeded, object: nil)
+            NotificationCenter.default.post(name: Notification.Name("dailyGoalExceeded"), object: nil)
         }
         
         return cigarettesLoggedToday
     }
     
-    /// Roll over to a new day. Called at midnight.
+    /// Log an urge (craving to smoke).
+    func logUrge() {
+        todayUrgeTimestamps.append(Date())
+        save()
+        NotificationCenter.default.post(name: Notification.Name("urgeLogged"), object: nil, userInfo: [
+            "count": todayUrgeTimestamps.count
+        ])
+    }
+    
+    /// Roll over to a new day. Called at midnight (automatically or manually).
     func rollOverToNewDay() {
         // Archive yesterday's data
         UserDefaults.standard.set(cigarettesLoggedToday, forKey: Keys.yesterdayCigarettes)
@@ -142,12 +179,13 @@ final class HabitTracker: ObservableObject {
         // Reset for new day
         cigarettesLoggedToday = 0
         todayCigaretteTimestamps = []
+        todayUrgeTimestamps = []
         hasCompletedDailySetup = false
         
         save()
     }
     
-    /// SOLO PER DEBUG: Imposta il conteggio sigarette
+    /// FOR DEBUG ONLY: Set cigarette count
     func debugSetCigarettes(count: Int) {
         cigarettesLoggedToday = max(0, count)
         save()
@@ -187,6 +225,7 @@ final class HabitTracker: ObservableObject {
         defaults.set(dailyCigaretteGoal, forKey: Keys.dailyGoal)
         defaults.set(cigarettesLoggedToday, forKey: Keys.cigarettesToday)
         defaults.set(todayCigaretteTimestamps, forKey: Keys.timestamps)
+        defaults.set(todayUrgeTimestamps, forKey: Keys.urgeTimestamps)
         defaults.set(currentStreak, forKey: Keys.currentStreak)
         defaults.set(longestStreak, forKey: Keys.longestStreak)
         defaults.set(hasCompletedDailySetup, forKey: Keys.hasCompletedSetup)
@@ -210,6 +249,7 @@ final class HabitTracker: ObservableObject {
         static let dailyGoal = "habit_dailyGoal"
         static let cigarettesToday = "habit_cigarettesToday"
         static let timestamps = "habit_timestamps"
+        static let urgeTimestamps = "habit_urgeTimestamps"
         static let currentStreak = "habit_currentStreak"
         static let longestStreak = "habit_longestStreak"
         static let hasCompletedSetup = "habit_hasCompletedSetup"

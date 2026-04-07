@@ -11,9 +11,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         UNUserNotificationCenter.current().delegate = self
         NotificationManager.shared.requestPermission()
         
-        // Schedule midnight reset check
+        // Schedule midnight reset check (DispatchQueue-based)
         MidnightResetScheduler.shared.scheduleCheck()
-        
+
+        // Also arm HabitTracker's own RunLoop timer for in-process midnight reset
+        HabitTracker.shared.scheduleMidnightReset()
+
         return true
     }
     
@@ -80,4 +83,5 @@ extension Notification.Name {
     static let midnightProgressResetTriggered = Notification.Name("midnightProgressResetTriggered")
     static let cigaretteLogged = Notification.Name("cigaretteLogged")
     static let dailyGoalExceeded = Notification.Name("dailyGoalExceeded")
+    static let dailyReset        = Notification.Name("dailyReset")
 }
