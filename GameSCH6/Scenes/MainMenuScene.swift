@@ -5,8 +5,7 @@ import SpriteKit
 class MainMenuScene: SKScene {
 
     // MARK: - Main Nodes
-    private var titleLabel:    SKLabelNode!
-    private var subtitleLabel: SKLabelNode!
+    private var titleNode:     SKSpriteNode!
     private var playButton:    SKNode!
 
     // Cigarette Counter
@@ -276,34 +275,22 @@ class MainMenuScene: SKScene {
     // MARK: - Titolo
 
     private func buildTitle() {
-        let shadow      = SKLabelNode(fontNamed: "Minecraft")
-        shadow.text     = "AD ASTRA"
-        shadow.fontSize = 52
-        shadow.fontColor = .black
-        shadow.position  = CGPoint(x: size.width / 2 + 3, y: size.height * 0.80 - 3)
-        shadow.zPosition = 9
-        addChild(shadow)
-
-        titleLabel          = SKLabelNode(fontNamed: "Minecraft")
-        titleLabel.text     = "AD ASTRA"
-        titleLabel.fontSize = 52
-        titleLabel.fontColor = GameConstants.Colors.paradisoGold
-        titleLabel.position  = CGPoint(x: size.width / 2, y: size.height * 0.80)
-        titleLabel.zPosition = 10
-        addChild(titleLabel)
-
-        subtitleLabel          = SKLabelNode(fontNamed: "Pixeboy-z8XGD")
-        subtitleLabel.text     = "THE ASCENT FROM ASH"
-        subtitleLabel.fontSize = 22
-        subtitleLabel.fontColor = SKColor.white.withAlphaComponent(0.55)
-        subtitleLabel.position  = CGPoint(x: size.width / 2, y: size.height * 0.80 - 44)
-        subtitleLabel.zPosition = 10
-        addChild(subtitleLabel)
-
+        titleNode = SKSpriteNode(imageNamed: "title")
+        // Position it where the text title was, slightly higher to center the logo mass
+        titleNode.position = CGPoint(x: size.width / 2, y: size.height * 0.74)
+        titleNode.zPosition = 10
+        
+        // Scale it to a reasonable size relative to screen width
+        let targetWidth = size.width * 1.4 // Doubled from 0.75
+        let scale = targetWidth / titleNode.size.width
+        titleNode.setScale(scale)
+        
+        addChild(titleNode)
+        
+        // Floating animation
         let floatUp = SKAction.moveBy(x: 0, y: 7, duration: 2.2)
         floatUp.timingMode = .easeInEaseOut
-        titleLabel.run(SKAction.repeatForever(SKAction.sequence([floatUp, floatUp.reversed()])))
-        subtitleLabel.run(SKAction.repeatForever(SKAction.sequence([floatUp, floatUp.reversed()])))
+        titleNode.run(SKAction.repeatForever(SKAction.sequence([floatUp, floatUp.reversed()])))
     }
 
     // MARK: - Play Button (CONTINUE if save exists, else PLAY)

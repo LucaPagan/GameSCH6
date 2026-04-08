@@ -36,13 +36,13 @@ struct HabitSetupView: View {
                     Text("☀️")
                         .font(.system(size: 40))
 
-                    Text("NUOVO GIORNO")
+                    Text("NEW DAY")
                         .font(.custom(pixelFont, size: 30))
                         .foregroundColor(Color(GameConstants.Colors.paradisoGold))
                         .shadow(color: .black, radius: 0, x: 2, y: -2)
 
                     if habitTracker.yesterdayCigaretteCount > 0 {
-                        Text("IERI: \(habitTracker.yesterdayCigaretteCount) SIGARETTE")
+                        Text("Yesterday: \(habitTracker.yesterdayCigaretteCount) Cigarettes")
                             .font(.custom(bodyFont, size: 18))
                             .foregroundColor(.white.opacity(0.55))
                     }
@@ -52,7 +52,7 @@ struct HabitSetupView: View {
 
                 // ── Goal setter ──
                 VStack(spacing: 20) {
-                    Text("QUANTE VUOI FUMARNE AL GIORNO?")
+                    Text("How much do you want to smoke today?")
                         .font(.custom(bodyFont, size: 17))
                         .foregroundColor(.white.opacity(0.80))
                         .multilineTextAlignment(.center)
@@ -71,7 +71,7 @@ struct HabitSetupView: View {
                                 .foregroundColor(colorForGoal(goal))
                                 .animation(.easeInOut(duration: 0.1), value: goal)
 
-                            Text("AL GIORNO")
+                            Text("For Day")
                                 .font(.custom(bodyFont, size: 14))
                                 .foregroundColor(.white.opacity(0.35))
                         }
@@ -132,7 +132,7 @@ struct HabitSetupView: View {
                     onComplete()
                     NotificationCenter.default.post(name: Notification.Name("startGameAutomatically"), object: nil)
                 } label: {
-                    Text("INIZIA L'ASCESA  ▲")
+                    Text("START  ▲")
                         .font(.custom(pixelFont, size: 22))
                         .foregroundColor(Color(red: 0.06, green: 0.04, blue: 0.00))
                         .frame(maxWidth: .infinity)
@@ -145,7 +145,7 @@ struct HabitSetupView: View {
 
                 // Nota se goal = 0
                 if goal == 0 {
-                    Text("Obiettivo zero = massima salute in gioco.")
+                    Text("Goal 0 = max health")
                         .font(.custom(bodyFont, size: 13))
                         .foregroundColor(.white.opacity(0.30))
                         .padding(.top, 8)
@@ -196,11 +196,11 @@ struct HabitSetupView: View {
 
     private func goalDescription(_ g: Int) -> String {
         switch g {
-        case 0:      return "Polmoni d'acciaio. Nessun malus in gioco."
-        case 1...4:  return "Ottimo obiettivo. Malus minimi."
-        case 5...9:  return "Accettabile. Il pendolo sarà irregolare."
-        case 10...14: return "Pericoloso. Tosse e visione compromessa."
-        default:     return "Critico. Sopravvivenza difficile."
+        case 0:      return "Iron lungs. No penalties at play."
+        case 1...4:  return "Excellent goal. Minimal penalties."
+        case 5...9:  return "Acceptable. The pendulum will be erratic."
+        case 10...14: return "Dangerous. Cough and impaired vision."
+        default:     return "Critical. Difficult survival."
         }
     }
 }
